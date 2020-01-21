@@ -21,4 +21,5 @@
 - Be careful not to add additional characters to your input. 
 - When  inputting data through Text Entry, additional trailing or preceding separators are fine because these will be removed but additional characters that are not the separator you selected may cause errors.
 - When inputting data through File Entry, additional newlines such as a newline at the end of the file will be treated as UUID items by the program. Additional characters such as these as well as invalid UUIDs will give the result “Request Failed.”
+- Invalid files and some other errors will cause the APIchallenge.go program to stop execution. If this happens, start over from step 4 above.
 - Navigate to http://localhost:8081/ to view the contents of all files in the repository from your browser
