@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>API Challenge</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+  <style>
+    {
+     box-sizing: border-box; 
+    }
+    body {
+      margin: 0;
+    }
+    #main {
+      display: flex;
+      min-height: calc(100vh - 30vh);
+    }
+    #main > article {
+      flex: 1;
+    }
+    #main > nav, 
+    #main > aside {
+      flex: 0 0 40vw;
+      background: #ebfff0;
+    }
+    #main > nav {
+      order: -1;
+    }
+    header, footer, article, nav, aside {
+      padding: 1em;
+    }
+    header, footer {
+      color: white;
+      background: #333;
+      height: 17vh;
+    }
+    hr {
+      display: block;
+      height: 1px;
+      border: 0;
+      border-top: 1px solid #ccc;
+      margin: 1em 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>API Challenge</h1>
+    <h5>by Eli Stewart</h5>
+  </header>
+  <div id="main">
+    <article>
+      <h2 id="settings">Settings</h2>
+      <hr></hr>
+      <h4 id="EntryTitle">Entry Type</h4>
+      <select id="entry">
+        <option value="text">Text</option>
+        <option value="file">File</option>
+      </select>
+      <h4 id="ModeTitle">Mode</h4>
+      <select id="mode">
+        <option value="Classic">Classic</option>
+        <option value="Timing">Timing</option>
+      </select>
+      <div id="SepTitle">
+        <h4> Seperator for Text Entry UUIDs</h4>
+      </div>
+      <select id="seperator">
+        <option value="n">Newline</option>
+        <option value=",">Comma</option>
+        <option value=" ">Space</option>
+      </select>
+    </article>
+    <nav>
+      <h2 id="UTitle">UUIDs</h2>
+      <hr></hr>
+      <h5 id="txtTitle">Text Entry</h5>
+      <textarea class="form-control" 
+        id = "UUIDs"
+        rows = "20"
+        cols = "65" placeholder="Desired UUIDs here"></textarea>
+      <h5 id="fileTitle">File Entry</h5>
+      <textarea class="form-control" 
+        id = "filename" 
+        rows = "1" 
+        cols = "65" 
+        placeholder="Path of UUID .txt file. Only Newline seperator supported for files"></textarea>
+    </nav>
+    <aside>
+      <h2>Result</h2>
+      <hr></hr>
+      <h5 id="resTitle">Awaiting your request</h5>
+      <textarea class="form-control" id = "fileDisplayArea"
+        rows = "20"
+        cols = "65" placeholder="Results..."></textarea>
+      <h5 id="timer">Stopwatch: </h5>
+    </aside>
+  </div>
+  <footer>
+    <button class="btn btn-default" id="get" onclick=requestResult()>Get Result</button>
+    <button class="btn btn-primary" id="reset" onclick=window.location.replace('http://localhost:8081/static/')>Reset</button>
+  </footer>
+</body>
+
+<script type="text/javascript">
+
+  var stat = getUrlVars()["result"]
+  if (stat === "Loading")
+  {
+    //remove all data entry items from the interface while a request is processing
+    //do not allow the user to reset and make a new request
+    removeAll()
+    remove("reset")
+    //request an update every 200 milliseconds
+    setTimeout(update, 200)
+  } else if (stat === "Done") {
+    //remove all data entry items from the interface while a request is processing
+    //allow the user to reset the interface to make another request
+    removeAll()
+    update()
+  }
+
+  function requestResult() 
+    {
+    //retrieve all user input
+    var uuidStrRaw = document.getElementById("UUIDs").value;
+    var mode = document.getElementById("mode").value
+    var sep = document.getElementById("seperator").value
+    var entry = document.getElementById("entry").value
+    var file = document.getElementById("filename").value
+    var uuidStr = ""
+    if (sep==="n") {
+      sep = "\n"
+    }
+    //parse user input according to setting selection
+    if (entry == "text"){
+      if (uuidStrRaw === "") {
+        alert("No input in the Text Entry box. Enter uuids in Text Entry box and try again.")
+        return
+      }
+      uuidStr = uuidStrRaw.split(sep).join(",")
+      while (uuidStr.lastIndexOf(",") == uuidStr.length - 1){
+        uuidStr = uuidStr.slice(0,uuidStr.length - 1)
+      }
+      while (uuidStr.indexOf(",") == 0){
+        uuidStr = uuidStr.slice(1,uuidStr.length)
+      }
+      file = ""
+    } else {
+      if (file === "") {
+        alert("No input in the File Entry box. Enter uuids in File Entry box and try again.")
+        return
+      }
+    }
+    //send request data to APIchallenge.go server
+    var xhr = new XMLHttpRequest() 
+    var url = "http://localhost:8081/submit?mode="+mode+"&file="+file
+    xhr.open("GET", url, true) 
+    xhr.setRequestHeader("uuid", uuidStr)
+    xhr.send() 
+    update()
+  }
+  
+  function update() 
+  {
+    if (stat === "Done")
+    { 
+      //if results are ready, read them into the UI
+      readData()
+    } else {
+      //else request another update
+      window.location.replace("http://localhost:8081/update")
+    }
+    
+  }
+
+  function removeAll()
+  {
+    remove("mode")
+    remove("seperator")
+    remove("UUIDs")
+    remove("filename")
+    remove("get")
+    remove("ModeTitle")
+    remove("SepTitle")
+    remove("txtTitle")
+    remove("fileTitle")
+    remove("EntryTitle")
+    remove("entry")
+    document.getElementById("resTitle").innerHTML = stat
+    document.getElementById("timer").innerHTML = "Stopwatch: " + getUrlVars()["time"]
+    document.getElementById("settings").innerHTML = "Settings recorded."
+    document.getElementById("UTitle").innerHTML = "UUIDs processing..."
+  }
+
+  function remove(id) 
+  {
+    var elem = document.getElementById(id)
+    elem.parentNode.removeChild(elem)
+  }
+
+
+  //credit to https://stackoverflow.com/questions/14446447/how-to-read-a-local-text-file for helping me write the critical parts of readData function
+  function readData()
+  {
+    if (stat == "Done")
+    {
+      var xFile = new XMLHttpRequest()
+      xFile.open("GET", "output.txt", false)
+      xFile.onreadystatechange = function ()
+      {
+        if(xFile.readyState === 4)
+        {
+          if(xFile.status === 200 || xFile.status == 0)
+          {   
+            //seperate time data and result data
+            var allText = xFile.responseText
+            var indx = allText.lastIndexOf(",")
+            var tim = allText.slice(indx+1)
+            var result = allText.slice(0,indx)
+            //format result to one item per line
+            result = result.split(",").join("\n")
+            //display info on UI
+            document.getElementById("fileDisplayArea").value = result
+            document.getElementById("timer").innerHTML = "Stopwatch: " + tim
+            document.getElementById("UTitle").innerHTML = "UUID Data Retrieved."
+          }
+        }
+      }
+      xFile.send(null)
+    }
+  }
+
+  // found getUrlVars function on stack overflow. See it here: https://stackoverflow.com/questions/12600024/how-to-get-parameters-from-a-url
+  function getUrlVars() 
+  {
+    var vars = {}
+    var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) {
+        vars[key] = value
+    })
+    return vars
+  }
+</script>
