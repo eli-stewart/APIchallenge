@@ -3,7 +3,16 @@
 1. Clone or download this repository
 2. Make sure to have Go downloaded. (https://golang.org/)
 3. Open terminal and navigate to the directory where you stored this repository
-4. In terminal type: go run APIchallenge.go
+4. In terminal type:
+
+
+```
+Reccomended:   go build APIchallenge.go
+               ./APIchallenge
+                   -or-
+Aleternative:  go run APIchallenge.go
+```
+        
 5. A browser window should open to http://localhost:8081/static/
 6. The interface allows you to input UUIDs via text entry or through a .txt  file. UUIDs entered to the text box may be separated by newlines, commas or spaces. If they are entered as a .txt file, each UUID must be on its own line. No other separators are supported for file entries.
 7. The interface also allows you to select one of two different methods for retrieving your data: 
@@ -16,9 +25,11 @@
 
 
 **Notes:**
+- I developed this project on my Mac but for testing purposes I cloned this repository and tried running it on my old laptop which has Windows. I found that every time I ran the command `go run APIchallenge.go` on Windows, I would have to authorize the program to open a browser window. However if I ran `go build APIchallenge.go` and then `./APIchallenge`, the first execution would require autorization, but subsequent calls to `./APIchallenge` would not require authorization. For this reason, I reccomend Window users use the second method for running the program.
 - Only request 1 set of UUIDs at a time. Until the utility finishes processing your request, do not reload the window or make another request in another window. The utility can only process one set of UUIDs at a time. Your second request will be denied. The UI will display the results of the first request once they are ready.
 - While data is being retrieved, the UI requests periodic updates from the APIchallenge.go program to see if the results are ready. The total elapsed time since the initial request is updated next to the UI’s “Stopwatch” element after each update. For additional information about the progress of your request view the terminal window.
 - Be careful not to add additional characters to your input. 
 - When  inputting data through Text Entry, additional trailing or preceding separators are fine because these will be removed but additional characters that are not the separator you selected may cause errors.
 - When inputting data through File Entry, additional newlines such as a newline at the end of the file will be treated as UUID items by the program. Additional characters such as these as well as invalid UUIDs will give the result “Request Failed.”
-- Navigate to http://localhost:8081/ to view the contents of all files in the repository from your browser
+- Invalid files and some other errors will cause the APIchallenge.go program to stop execution. If this happens, start over from step 4 above.
+- Navigate to http://localhost:8081/ while APIchallenge.go is running to view the contents of all files in the repository from your browser
