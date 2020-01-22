@@ -11,7 +11,7 @@
                    
         go build APIchallenge.go
         
-        ./APIchallenge.go   
+        ./APIchallenge   
         
 5. A browser window should open to http://localhost:8081/static/
 6. The interface allows you to input UUIDs via text entry or through a .txt  file. UUIDs entered to the text box may be separated by newlines, commas or spaces. If they are entered as a .txt file, each UUID must be on its own line. No other separators are supported for file entries.
