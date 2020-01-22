@@ -5,13 +5,14 @@
 3. Open terminal and navigate to the directory where you stored this repository
 4. In terminal type: 
 
-        go run APIchallenge.go
+        go build APIchallenge.go
+        
+        ./APIchallenge
         
                    -or-
                    
-        go build APIchallenge.go
         
-        ./APIchallenge   
+        go run APIchallenge.go
         
 5. A browser window should open to http://localhost:8081/static/
 6. The interface allows you to input UUIDs via text entry or through a .txt  file. UUIDs entered to the text box may be separated by newlines, commas or spaces. If they are entered as a .txt file, each UUID must be on its own line. No other separators are supported for file entries.
@@ -25,6 +26,7 @@
 
 
 **Notes:**
+- I developed this project on my Mac but for testing purposes I cloned this repository and tried running it on my old laptop which has Windows. I found that every time I ran the command `go run APIchallenge.go` I would have to authorize the program to opwen a browser window however if I ran `go build APIchallenge.go` and then `./APIchallenge` the first execution would require autorization but subsequent calls to `./APIchallenge` would not require authorization and would open the browser window as seamlessly as on my Mac.
 - Only request 1 set of UUIDs at a time. Until the utility finishes processing your request, do not reload the window or make another request in another window. The utility can only process one set of UUIDs at a time. Your second request will be denied. The UI will display the results of the first request once they are ready.
 - While data is being retrieved, the UI requests periodic updates from the APIchallenge.go program to see if the results are ready. The total elapsed time since the initial request is updated next to the UI’s “Stopwatch” element after each update. For additional information about the progress of your request view the terminal window.
 - Be careful not to add additional characters to your input. 
