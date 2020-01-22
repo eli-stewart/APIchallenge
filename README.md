@@ -3,7 +3,16 @@
 1. Clone or download this repository
 2. Make sure to have Go downloaded. (https://golang.org/)
 3. Open terminal and navigate to the directory where you stored this repository
-4. In terminal type: go run APIchallenge.go
+4. In terminal type: 
+
+        'go run APIchallenge.go'
+        
+                   -or-
+                   
+        'go build APIchallenge.go'
+        
+        './APIchallenge.go'    
+        
 5. A browser window should open to http://localhost:8081/static/
 6. The interface allows you to input UUIDs via text entry or through a .txt  file. UUIDs entered to the text box may be separated by newlines, commas or spaces. If they are entered as a .txt file, each UUID must be on its own line. No other separators are supported for file entries.
 7. The interface also allows you to select one of two different methods for retrieving your data: 
