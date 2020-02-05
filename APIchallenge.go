@@ -242,7 +242,7 @@ func operateCache() {
     if err != nil {
         path = ""
     }
-    cacheFile := filepath.Join(path, "cache.json")
+    cacheFile := filepath.Join(path, "APIchallenge_cache.json")
     var cacheJson cacheStore
     var cache map[string]string
     // check if user's computer has data stored from previous session
