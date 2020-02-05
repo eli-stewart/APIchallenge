@@ -11,6 +11,9 @@ import (
     "strings"
     "os/exec"
     "runtime"
+    "encoding/json"
+    "path/filepath"
+    "github.com/kirsle/configdir"
 )
 
 type reqItem struct {
@@ -25,26 +28,43 @@ type respItem struct{
     body string
 }
 
+type cacheQuery struct{
+    order int
+    uuid string
+}
+
+type cacheStore struct {
+    Cache map[string]string `json:"cache"`
+}
+
+var cacheQueryChan = make(chan cacheQuery)
+var cacheEntryChan = make(chan respItem)
+var cacheSaveChan = make(chan bool)
+var reqChan = make(chan reqItem)
+var responseChan = make(chan respItem)
+
 func classic(uuid []string) ([]string, string){
     start := time.Now()
-    reqChan := make(chan reqItem)
-    stagingChan := make(chan reqItem) 
-    responseChan := make(chan respItem)
+    stagingChan := make(chan reqItem)
     go func() {
         for i, u := range uuid {
             go func(i int, u string) {
-                //uuids are sent along with their base64 encoding and their input order on the request channel
-                reqChan <- reqItem{order: i, uuid: u, auth: b64.URLEncoding.EncodeToString([]byte(u))} 
+                //uuids are sent along with their input order to the cache
+                cacheQueryChan <- cacheQuery{order: i, uuid: u} // cache will forward request to the reqChan or will send response to responseChan
             }(i, u)
         }
     }()
     //to initialize the process, 5 requests are staged
-    for i:=0; i<5; i++{
-        go func(){
-            c := <- reqChan
-            stagingChan <- c
-        }()
-    }
+    i := 0
+    go func(){
+        for i<5{
+            select{
+                case c := <- reqChan:
+                stagingChan <- c
+                i++
+            }
+        }
+    }()
     go func(){
         for{
             select {
@@ -79,6 +99,8 @@ func classic(uuid []string) ([]string, string){
                     //send the reponse info to the response channel
                     result := respItem{this.order, this.uuid, strBody}
                     responseChan <- result
+                    // cache it
+                    cacheEntryChan <- result
                     //stage another request since the API is now availible to service another request
                     next := <- reqChan
                     stagingChan <- next
@@ -90,7 +112,7 @@ func classic(uuid []string) ([]string, string){
     
     resCount := 0
     //make copy of uuid slice to ensure that the result slice is of the same size
-    res := uuid
+    res := make([]string, len(uuid))
     for{
         select {
         case r := <- responseChan:
@@ -99,7 +121,6 @@ func classic(uuid []string) ([]string, string){
             fmt.Println("uuid:", r.uuid, "result:", r.body)
             resCount++
             if resCount == len(uuid){
-                //when there is a result for all uuids return the result and the time elapsed since the beginning of the function
                 tim := fmt.Sprintf("%v", time.Since(start))
                 return res, tim
             }
@@ -110,15 +131,13 @@ func classic(uuid []string) ([]string, string){
 
 func timingMethod(uuid []string)([]string, string){
     start := time.Now()
-    reqChan := make(chan reqItem)
-    responseChan := make(chan respItem)
     brk := 600*time.Millisecond //time between each batch of 4 requests
     inc := 100*time.Millisecond //time between each request within a batch
     count := 0 //to track the number of requests already in the rurrent batch
     go func(){
         for i, u := range uuid {
-            //uuids are sent along with their base64 encoding and their input order on the request channel
-            reqChan <- reqItem{order: i, uuid: u, auth: b64.URLEncoding.EncodeToString([]byte(u))}
+            //uuids are sent along with their input order to the cache
+            cacheQueryChan <- cacheQuery{order: i, uuid: u}
         }
     }()
     //the below block continuously sends out sets of 4 requests according to the values in brk and inc
@@ -127,7 +146,7 @@ func timingMethod(uuid []string)([]string, string){
             select{
             case req := <-reqChan:
                 //send 4 requests seperated by duration of inc 
-                go call(req, responseChan, reqChan)
+                go call(req)
                 if count < 4{
                     time.Sleep(inc)
                     count++
@@ -140,7 +159,7 @@ func timingMethod(uuid []string)([]string, string){
         }
     }()
     resCount := 0
-    res := uuid
+    res := make([]string, len(uuid))
     for{
         select {
         case r := <- responseChan:
@@ -157,7 +176,7 @@ func timingMethod(uuid []string)([]string, string){
     }
 }
 
-func call(item reqItem, resChan chan respItem, reqChan chan reqItem){
+func call(item reqItem){
     //create the request
     req, err := http.NewRequest("GET", "https://challenges.qluv.io/items/"+item.uuid, nil)
     if err != nil {
@@ -180,12 +199,18 @@ func call(item reqItem, resChan chan respItem, reqChan chan reqItem){
             return
         }  
         body = string(bodyByte)
-        resChan <- respItem{item.order, item.uuid, string(body)}
+        result := respItem{item.order, item.uuid, string(body)}
+        responseChan <- result
+        //store in cache
+        cacheEntryChan <- result
     } else if resp.StatusCode == 429 {
         //if the request failed due to Too May Requests, retry later
         reqChan <- item
     } else {
-        resChan <- respItem{item.order, item.uuid, "Request Failed"}
+        result := respItem{item.order, item.uuid, "Request Failed"}
+        responseChan <- result
+        //store in cache
+        cacheEntryChan <- result
     }
     defer resp.Body.Close()
 }
@@ -210,12 +235,74 @@ func openbrowser(url string) {
 
 }
 
-func main(){
+func operateCache() {
+    //one the cache begins opertation it checks the user's computer for saved cache data from a previous session
+    path := configdir.LocalCache() // locates the user's local cache foilder
+    err := configdir.MakePath(path) // Ensures the folder exists.
+    if err != nil {
+        path = ""
+    }
+    cacheFile := filepath.Join(path, "cache.json")
+    var cacheJson cacheStore
+    var cache map[string]string
+    // check if user's computer has data stored from previous session
+    if _, err = os.Stat(cacheFile); !os.IsNotExist(err) {
+        f, err := os.Open(cacheFile)
+        if err != nil {
+            fmt.Println("failed to read saved cache data")
+            cache = make(map[string]string)
+        } else {
+            defer f.Close()
+            //retrieve the stored cache data and initialize the cache with that data
+            decoder := json.NewDecoder(f)
+            decoder.Decode(&cacheJson)
+            cache = cacheJson.Cache
+        }
+    } else {
+        // if the user does not have saved data in cache.json initialize an empty cache
+        cache = make(map[string]string)
+    }
+    for {
+        select {
+        case req := <- cacheQueryChan:
+            go func() {
+                if data, in := cache[req.uuid]; in {
+                    //if the cache contains the requested uuid forward the response
+                    responseChan <- respItem{order: req.order, uuid: req.uuid, body: data}
+                } else {
+                    //otherwise put it on the request channel to request it from the API
+                    reqChan <- reqItem{order: req.order, uuid: req.uuid, auth: b64.URLEncoding.EncodeToString([]byte(req.uuid))}
+                }
+            }()
+        case res := <- cacheEntryChan:
+            if _ , in := cache[res.uuid]; !in {
+                // store the retrieved result in the cache
+                cache[res.uuid] = res.body
+            }
+        case <- cacheSaveChan:
+            if !(path == ""){ 
+                //if the program was able to find the user's local cache foilder, marshal the cache to json and store it there
+                cacheJson = cacheStore{cache}
+                f, err := os.Create(cacheFile)
+                if err != nil {
+                    fmt.Println("failed to save cache data")
+                    break
+                }
+                defer f.Close()
+                encoder := json.NewEncoder(f)
+                encoder.Encode(&cacheJson)
+                fmt.Println("Stored session cache data to ", cacheFile)
+                fmt.Println("_____________________________________")
+            }
+        }
+    }
+}
 
+func main(){
+    go operateCache()
     status := ""
     var start time.Time
     openbrowser("http://localhost:8081/static/")
-
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
         http.ServeFile(w, r, r.URL.Path[1:])
     })
@@ -257,18 +344,39 @@ func main(){
         fmt.Println("UUIDs:")
         fmt.Println(uuid)
         fmt.Println("_____________________________________")
-        var result []string
+        var resultSet []string
         var tim string
+        result := make([]string, len(uuid))
+
+        //remove duplicates and store the indexes and order of each entry
+        uuidCompressed := make(map[string][]int)
+        uuidSet := make([]string, 0)
+        for i, v := range uuid{
+            indx, in := uuidCompressed[v]
+            if !in {
+                uuidSet = append(uuidSet, v)
+                indx = make([]int,0)
+            }
+            uuidCompressed[v] = append(indx, i)
+        }
         //start stopwatch 
         start = time.Now()
         if mode == "Classic"{
             //retrieve data using classic function according to user settings 
             fmt.Println("Requesting UUIDs using Classic method")
-            result, tim = classic(uuid)
+            resultSet, tim = classic(uuidSet)
         } else if mode == "Timing"{
             //retrieve data using timingMethod function according to user settings 
             fmt.Println("Requesting UUIDs using Timing method")
-            result, tim = timingMethod(uuid)
+            resultSet, tim = timingMethod(uuidSet)
+        }
+        //save the updated cache to cache.json for future sessions
+        cacheSaveChan <- true
+        //build full results using resultSet and uuidCompressed
+        for i, res := range resultSet{
+            for _ , indx := range uuidCompressed[uuidSet[i]]{
+                result[indx] = res
+            }
         }
         fmt.Println("_____________________________________")
         fmt.Println("Result:")
@@ -276,7 +384,6 @@ func main(){
         fmt.Println("_____________________________________")
         fmt.Println("Processing Time:")
         fmt.Println(tim)
-        fmt.Println("_____________________________________")
         //put data and final processing time into output.txt file
         result = append(result, tim)
         resultStr := strings.Join(result, ",")
@@ -319,10 +426,7 @@ func main(){
 
         w.WriteHeader(http.StatusFound)
     })
-
     fs := http.FileServer(http.Dir("static/"))
     http.Handle("/static/", http.StripPrefix("/static/", fs))
-
     log.Fatal(http.ListenAndServe(":8081", nil))
-
 }
